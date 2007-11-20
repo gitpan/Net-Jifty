@@ -1,0 +1,109 @@
+NAME
+    Net::Jifty - interface to online Jifty applications
+
+VERSION
+    Version 0.01 released 20 Nov 07
+
+SYNOPSIS
+        use Net::Jifty;
+        my $j = Net::Jifty->new(site => 'http://mushroom.mu/', cookie_name => 'MUSHROOM_KINGDOM_SID', appname => 'MushroomKingdom', email => 'god@mushroom.mu', password => 'melange');
+
+        # the story begins
+        $j->create(Hero => name => 'Mario', job => 'Plumber');
+
+        # find the hero whose job is Plumber and change his name to Luigi and color
+        # to green
+        $j->update(Hero => job => 'Plumber', name => 'Luigi', color => 'Green');
+
+        # win!
+        $j->delete(Enemy => name => 'Bowser');
+
+DESCRIPTION
+    Jifty is a full-stack web framework. It provides an optional REST
+    interface for applications. Using this module, you can interact with
+    that REST interface to write client-side utilities.
+
+    You can use this module directly, but you'll be better off subclassing
+    it, such as what we've done for Net::Hiveminder.
+
+  login
+    This assumes your site is using Jifty::Plugin::Authentication::Password.
+    If that's not the case, override this in your subclass.
+
+  call Action, Args
+    This uses the Jifty "web services" API to perform an action. This is NOT
+    the REST interface, though it resembles it to some degree.
+
+    This module currently only uses this to log in.
+
+  method Method, URL[, Args]
+    This will perform a GET, POST, PUT, DELETE, etc using the internal
+    LWP::UserAgent object.
+
+    Your URL may be a string or an array reference (which will have its
+    parts properly escaped and joined with "/"). Your URL already has
+    "http://your.site/=/" prepended to it, and ".yml" appended to it, so you
+    only need to pass something like "model/YourApp.Model.Foo/name", or
+    "["model", "YourApp.Model.Foo", "name"]".
+
+    This will return the data structure returned by the Jifty application,
+    or throw an error.
+
+  post URL, Args
+    This will post the arguments to the specified URL. See the documentation
+    for "method".
+
+  get URL, Args
+    This will get the specified URL, using the arguments. See the
+    documentation for "method".
+
+  act Action, Args
+    Perform the specified action, using the specified arguments.
+
+  create Model, FIELDS
+    Create a new object of type Model with the FIELDS set.
+
+  delete Model, Key => Value
+    Find some Model where Key => Value and delete it
+
+  update Model, Key => Value, FIELDS
+    Find some Model where Key => Value and set FIELDS on it.
+
+  read Model, Key => Value
+    Find some Model where Key => Value and return it.
+
+  canonicalize_package Type, Package
+    Prepends "$appname.$Type." to $Package unless it's there already.
+
+  canonicalize_action Action
+    Prepends "$appname.Action." unless it's there already.
+
+  canonicalize_model Model
+    Prepends "$appname.Model." unless it's there already.
+
+  get_sid
+    Retrieves the SID from the LWP::UserAgent object
+
+  join_url Fragments
+    Encodes the fragments and joins them with "/".
+
+  escape Strings
+    URI escapes each string
+
+SEE ALSO
+    Jifty, Net::Hiveminder
+
+AUTHOR
+    Shawn M Moore, "<sartak at gmail.com>"
+
+BUGS
+    Please report any bugs or feature requests to "bug-net-jifty at
+    rt.cpan.org", or through the web interface at
+    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Net-Jifty>.
+
+COPYRIGHT & LICENSE
+    Copyright 2007 Best Practical Solutions.
+
+    This program is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
+

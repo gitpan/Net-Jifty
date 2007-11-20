@@ -1,0 +1,24 @@
+--- 
+abstract: interface to online Jifty applications
+author: Shawn M Moore, C<< <sartak at gmail.com> >>
+build_requires: 
+  Test::MockObject: 0
+  Test::More: 0
+distribution_type: module
+generated_by: Module::Install version 0.67
+license: perl
+meta-spec: 
+  url: http://module-build.sourceforge.net/META-spec-v1.3.html
+  version: 1.3
+name: Net-Jifty
+no_index: 
+  directory: 
+    - inc
+    - t
+requires: 
+  Encode: 0
+  LWP::UserAgent: 0
+  Moose: 0
+  URI: 0
+  YAML: 0
+version: 0.01
