@@ -8,6 +8,9 @@ requires        'LWP::UserAgent';
 requires        'YAML';
 requires        'URI';
 requires        'Encode';
+requires        'DateTime';
+requires        'Email::Address';
+requires        'Term::ReadKey';
 
 build_requires  'Test::More';
 build_requires  'Test::MockObject';

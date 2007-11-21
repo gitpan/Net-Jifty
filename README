@@ -2,7 +2,7 @@ NAME
     Net::Jifty - interface to online Jifty applications
 
 VERSION
-    Version 0.01 released 20 Nov 07
+    Version 0.02 released 21 Nov 07
 
 SYNOPSIS
         use Net::Jifty;
@@ -26,9 +26,21 @@ DESCRIPTION
     You can use this module directly, but you'll be better off subclassing
     it, such as what we've done for Net::Hiveminder.
 
+  BUILD
+    Each Net::Jifty object will do the following upon creation:
+
+    Read config
+        ..but only if you "use_config" is set to true.
+
+    Log in
+        ..unless a sid is available, in which case we're already logged in.
+
   login
     This assumes your site is using Jifty::Plugin::Authentication::Password.
     If that's not the case, override this in your subclass.
+
+    This is called automatically when each Net::Jifty object is constructed
+    (unless a session ID is passed in).
 
   call Action, Args
     This uses the Jifty "web services" API to perform an action. This is NOT
@@ -44,7 +56,7 @@ DESCRIPTION
     parts properly escaped and joined with "/"). Your URL already has
     "http://your.site/=/" prepended to it, and ".yml" appended to it, so you
     only need to pass something like "model/YourApp.Model.Foo/name", or
-    "["model", "YourApp.Model.Foo", "name"]".
+    "[qw/model YourApp.Model.Foo name]".
 
     This will return the data structure returned by the Jifty application,
     or throw an error.
@@ -89,6 +101,48 @@ DESCRIPTION
 
   escape Strings
     URI escapes each string
+
+  load_date Date
+    Loads a yyyy-mm-dd date into a DateTime object.
+
+  email_eq Email, Email
+    Compares two email address. Returns true if they're equal, false if
+    they're not.
+
+  is_me Email
+    Returns true if the given email looks like it is the current user's.
+
+  load_config
+    This will return a hash reference of the user's preferences. Because
+    this method is designed for use in small standalone scripts, it has a
+    few peculiarities.
+
+    *   It will "warn" if the permissions are too liberal on the config
+        file, and fix them.
+
+    *   It will prompt the user for an email and password if necessary.
+        Given the email and password, it will attempt to log in using them.
+        If that fails, then it will try again.
+
+    *   Upon successful login, it will write a new config consisting of the
+        options already in the config plus session ID, email, and password.
+
+  config_permissions
+    This will warn about (and fix) config files being readable by group or
+    others.
+
+  read_config_file
+    This transforms the config file to a hashref. It also does any
+    postprocessing needed, such as transforming localhost to 127.0.0.1 (due
+    to an obscure bug, probably in HTTP::Cookies)
+
+  write_config_file
+    This will write the config to disk. This is usually only done when a sid
+    is discovered, but may happen any time.
+
+  prompt_login_info
+    This will ask the user for her email and password. It may do so
+    repeatedly until login is successful.
 
 SEE ALSO
     Jifty, Net::Hiveminder

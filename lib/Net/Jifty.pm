@@ -5,6 +5,9 @@ use YAML;
 use Encode;
 use URI;
 use LWP::UserAgent;
+use DateTime;
+use Email::Address;
+use Fcntl qw(:mode);
 
 =head1 NAME
 
@@ -12,11 +15,11 @@ Net::Jifty - interface to online Jifty applications
 
 =head1 VERSION
 
-Version 0.01 released 20 Nov 07
+Version 0.02 released 21 Nov 07
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
@@ -45,21 +48,21 @@ as what we've done for L<Net::Hiveminder>.
 =cut
 
 has site => (
-    is            => 'ro',
+    is            => 'rw',
     isa           => 'Str',
     required      => 1,
     documentation => "The URL of your application",
 );
 
 has cookie_name => (
-    is            => 'ro',
+    is            => 'rw',
     isa           => 'Str',
     required      => 1,
     documentation => "The name of the session ID cookie. This can be found in your config under Framework/Web/SessinCookieName",
 );
 
 has appname => (
-    is            => 'ro',
+    is            => 'rw',
     isa           => 'Str',
     required      => 1,
     documentation => "The name of the application, as it is known to Jifty",
@@ -109,8 +112,50 @@ has ua => (
     },
 );
 
+has config_file => (
+    is            => 'rw',
+    isa           => 'Str',
+    default       => "$ENV{HOME}/.jifty",
+    documentation => "The place to look for the user's config file",
+);
+
+has use_config => (
+    is      => 'rw',
+    isa     => 'Bool',
+    default => 0,
+    documentation => "Whether or not to use the user's config",
+);
+
+has config => (
+    is      => 'rw',
+    isa     => 'HashRef',
+    default => sub { {} },
+    documentation => "Storage for the user's config",
+);
+
+=head2 BUILD
+
+Each L<Net::Jifty> object will do the following upon creation:
+
+=over 4
+
+=item Read config
+
+..but only if you C<use_config> is set to true.
+
+=item Log in
+
+..unless a sid is available, in which case we're already logged in.
+
+=back
+
+=cut
+
 sub BUILD {
     my $self = shift;
+
+    $self->load_config
+        if $self->use_config && $self->config_file;
 
     $self->login
         unless $self->sid;
@@ -120,6 +165,9 @@ sub BUILD {
 
 This assumes your site is using L<Jifty::Plugin::Authentication::Password>.
 If that's not the case, override this in your subclass.
+
+This is called automatically when each L<Net::Jifty> object is constructed
+(unless a session ID is passed in).
 
 =cut
 
@@ -142,6 +190,7 @@ sub login {
         if $result->{failure};
 
     $self->get_sid;
+    return 1;
 }
 
 =head2 call Action, Args
@@ -393,7 +442,7 @@ Encodes the fragments and joins them with C</>.
 sub join_url {
     my $self = shift;
 
-    return join '/', map { $self->escape($_) } @_
+    return join '/', map { $self->escape($_) } grep { defined } @_
 }
 
 =head2 escape Strings
@@ -408,6 +457,240 @@ sub escape {
     return map { s/([^a-zA-Z0-9_.!~*'()-])/uc sprintf("%%%02X", ord $1)/eg; $_ }
            map { Encode::encode_utf8($_) }
            @_
+}
+
+=head2 load_date Date
+
+Loads a yyyy-mm-dd date into a L<DateTime> object.
+
+=cut
+
+sub load_date {
+    my $self = shift;
+    my $ymd  = shift;
+
+    # XXX: this is a temporary hack until Hiveminder is pulled live
+    $ymd =~ s/ 00:00:00$//;
+
+    my ($y, $m, $d) = $ymd =~ /^(\d\d\d\d)-(\d\d)-(\d\d)$/
+        or confess "Invalid date passed to load_date: $ymd. Expected yyyy-mm-dd.";
+
+    return DateTime->new(
+        time_zone => 'floating',
+        year      => $y,
+        month     => $m,
+        day       => $d,
+    );
+}
+
+=head2 email_eq Email, Email
+
+Compares two email address. Returns true if they're equal, false if they're not.
+
+=cut
+
+sub email_eq {
+    my $self = shift;
+    my $a    = shift;
+    my $b    = shift;
+
+    # if one's defined and the other isn't, return 0
+    return 0 unless (defined $a ? 1 : 0)
+                 == (defined $b ? 1 : 0);
+
+    return 1 if !defined($a) && !defined($b);
+
+    # so, both are defined
+
+    for ($a, $b) {
+        s/<nobody>/<nobody\@localhost>/;
+        my ($email) = Email::Address->parse($_);
+        $_ = lc($email->address);
+    }
+
+    return $a eq $b;
+}
+
+=head2 is_me Email
+
+Returns true if the given email looks like it is the current user's.
+
+=cut
+
+sub is_me {
+    my $self = shift;
+    my $email = shift;
+
+    return 0 if !defined($email);
+
+    return $self->email_eq($self->email, $email);
+}
+
+=head2 load_config
+
+This will return a hash reference of the user's preferences. Because this
+method is designed for use in small standalone scripts, it has a few
+peculiarities.
+
+=over 4
+
+=item
+
+It will C<warn> if the permissions are too liberal on the config file, and fix
+them.
+
+=item
+
+It will prompt the user for an email and password if necessary. Given
+the email and password, it will attempt to log in using them. If that fails,
+then it will try again.
+
+=item
+
+Upon successful login, it will write a new config consisting of the options
+already in the config plus session ID, email, and password.
+
+=back
+
+=cut
+
+sub load_config {
+    my $self = shift;
+
+    $self->config_permissions;
+    $self->read_config_file;
+
+    # allow config to override everything. this may need to be less free in
+    # the future
+    while (my ($key, $value) = each %{ $self->config }) {
+        $self->$key($value)
+            if $self->can($key);
+    }
+
+    $self->prompt_login_info
+        unless $self->config->{email} || $self->config->{sid};
+
+    # update config if we are logging in manually
+    unless ($self->config->{sid}) {
+
+        # if we have user/pass in the config then we still need to log in here
+        unless ($self->sid) {
+            $self->login;
+        }
+
+        # now write the new config
+        $self->config->{sid} = $self->sid;
+        $self->write_config_file;
+    }
+
+    return $self->config;
+}
+
+=head2 config_permissions
+
+This will warn about (and fix) config files being readable by group or others.
+
+=cut
+
+sub config_permissions {
+    my $self = shift;
+    my $file = $self->config_file;
+
+    return if $^O eq 'MSWin32';
+    return unless -e $file;
+    my @stat = stat($file);
+    my $mode = $stat[2];
+    if ($mode & S_IRGRP || $mode & S_IROTH) {
+        warn "Config file $file is readable by users other than you, fixing.";
+        chmod 0600, $file;
+    }
+}
+
+=head2 read_config_file
+
+This transforms the config file to a hashref. It also does any postprocessing
+needed, such as transforming localhost to 127.0.0.1 (due to an obscure bug,
+probably in HTTP::Cookies)
+
+=cut
+
+sub read_config_file {
+    my $self = shift;
+    my $file = $self->config_file;
+
+    return unless -e $file;
+
+    $self->config(YAML::LoadFile($self->config_file) || {});
+
+    if ($self->config->{site}) {
+        # Somehow, localhost gets normalized to localhost.localdomain,
+        # and messes up HTTP::Cookies when we try to set cookies on
+        # localhost, since it doesn't send them to
+        # localhost.localdomain.
+        $self->config->{site} =~ s/localhost/127.0.0.1/;
+    }
+}
+
+=head2 write_config_file
+
+This will write the config to disk. This is usually only done when a sid is
+discovered, but may happen any time.
+
+=cut
+
+sub write_config_file {
+    my $self = shift;
+    my $file = $self->config_file;
+
+    YAML::DumpFile($file, $self->config);
+    chmod 0600, $file;
+}
+
+=head2 prompt_login_info
+
+This will ask the user for her email and password. It may do so repeatedly
+until login is successful.
+
+=cut
+
+sub prompt_login_info {
+    my $self = shift;
+
+    print << "END_WELCOME";
+Before we get started, please enter your @{[ $self->site ]}
+username and password.
+
+This information will be stored in @{[ $self->config_file ]}, 
+should you ever need to change it.
+
+END_WELCOME
+
+    local $| = 1; # Flush buffers immediately
+
+    while (1) {
+        print "First, what's your email address? ";
+        $self->config->{email} = <STDIN>;
+        chomp($self->config->{email});
+
+        require Term::ReadKey;
+        print "And your password? ";
+        Term::ReadKey::ReadMode('noecho');
+        $self->config->{password} = <STDIN>;
+        chomp($self->config->{password});
+        Term::ReadKey::ReadMode('restore');
+
+        print "\n";
+
+        $self->email($self->config->{email});
+        $self->password($self->config->{password});
+
+        last if eval { $self->login };
+
+        $self->email('');
+        $self->password('');
+
+        print "That combination doesn't seem to be correct. Try again?\n";
+    }
 }
 
 =head1 SEE ALSO
