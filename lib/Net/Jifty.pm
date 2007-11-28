@@ -8,6 +8,7 @@ use LWP::UserAgent;
 use DateTime;
 use Email::Address;
 use Fcntl qw(:mode);
+use HTTP::Request;
 
 =head1 NAME
 
@@ -15,11 +16,11 @@ Net::Jifty - interface to online Jifty applications
 
 =head1 VERSION
 
-Version 0.02 released 21 Nov 07
+Version 0.03 released 28 Nov 07
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 SYNOPSIS
 
@@ -44,6 +45,11 @@ interface to write client-side utilities.
 
 You can use this module directly, but you'll be better off subclassing it, such
 as what we've done for L<Net::Hiveminder>.
+
+This module also provides a number of convenient methods for writing short
+scripts. For example, passing C<< use_config => 1 >> to C<new> will look at
+the config file for the username and password (or SID) of the user. If neither
+is available, it will prompt the user for them.
 
 =cut
 
@@ -104,6 +110,7 @@ has ua => (
         my $ua = LWP::UserAgent->new;
 
         $ua->cookie_jar({});
+        push @{ $ua->requests_redirectable }, qw( POST PUT DELETE );
 
         # Load the user's proxy settings from %ENV
         $ua->env_proxy;
@@ -193,9 +200,9 @@ sub login {
     return 1;
 }
 
-=head2 call Action, Args
+=head2 call ACTION, ARGS
 
-This uses the Jifty "web services" API to perform an action. This is NOT the
+This uses the Jifty "web services" API to perform C<ACTION>. This is I<not> the
 REST interface, though it resembles it to some degree.
 
 This module currently only uses this to log in.
@@ -222,13 +229,36 @@ sub call {
     }
 }
 
-=head2 method Method, URL[, Args]
+=head2 form_url_encoded_args ARGS
+
+This will take a hash containing arguments and convert those arguments into URL encoded form. I.e., (x => 1, y => 2, z => 3) becomes:
+
+  x=1&y=2&z=3
+
+These are then ready to be appened to the URL on a GET or placed into the content of a PUT.
+
+=cut
+
+sub form_url_encoded_args {
+    my $self = shift;
+    my %args = @_;
+
+    my $uri = '';
+    while (my ($key, $value) = each %args) {
+        $uri .= join('=', map { $self->escape($_) } $key, $value) . '&';
+    }
+    chop $uri;
+
+    return $uri;
+}
+
+=head2 method METHOD, URL[, ARGS]
 
 This will perform a GET, POST, PUT, DELETE, etc using the internal
 L<LWP::UserAgent> object.
 
-Your URL may be a string or an array reference (which will have its parts
-properly escaped and joined with C</>). Your URL already has
+C<URL> may be a string or an array reference (which will have its parts
+properly escaped and joined with C</>). C<URL> already has
 C<http://your.site/=/> prepended to it, and C<.yml> appended to it, so you only
 need to pass something like C<model/YourApp.Model.Foo/name>, or
 C<[qw/model YourApp.Model.Foo name]>.
@@ -255,22 +285,41 @@ sub method {
     if ($method eq 'get' || $method eq 'head') {
         my $uri = $self->site . '/=/' . $url . '.yml';
 
-        if (keys %args) {
-            $uri .= '?';
-            while (my ($key, $value) = each %args) {
-                $uri .= '&' . join '=', map { $self->escape($_) } $key, $value;
-            }
-            # it's easier than keeping a flag of "did we already append?"
-            $uri =~ s/\?&/?/;
-        }
+        $uri .= '?' . $self->form_url_encoded_args(%args)
+            if keys %args;
 
         $res = $self->ua->$method($uri);
     }
-    else {
+    elsif ($method eq 'post') {
         $res = $self->ua->$method(
             $self->site . '/=/' . $url . '.yml',
             \%args
         );
+    }
+
+    # LWP::UserAgent provides direct methods only for get, head, and post
+    else {
+        my $req = HTTP::Request->new(
+            uc($method) => $self->site . '/=/' . $url . '.yml'
+        );
+
+        if (keys %args) {
+            my $content = $self->form_url_encoded_args(%args);
+            $req->header('Content-type' => 'application/x-www-form-urlencoded');
+            $req->content($content);
+        }
+
+        $res = $self->ua->request($req);
+
+        # XXX Compensation for a bug in Jifty::Plugin::REST... it doesn't
+        # remember to add .yml when redirecting after an update, so we will
+        # try to do that ourselves... fixed in a Jifty coming to stores near
+        # you soon!
+        if ($res->is_success && $res->content_type eq 'text/html') {
+            $req = $res->request->clone;
+            $req->uri($req->uri . '.yml');
+            $res = $self->ua->request($req);
+        }
     }
 
     if ($res->is_success) {
@@ -280,10 +329,10 @@ sub method {
     }
 }
 
-=head2 post URL, Args
+=head2 post URL, ARGS
 
-This will post the arguments to the specified URL. See the documentation for
-C<method>.
+This will post C<ARGS> to C<URL>. See the documentation for C<method> about
+the format of C<URL>.
 
 =cut
 
@@ -292,10 +341,10 @@ sub post {
     $self->method('post', @_);
 }
 
-=head2 get URL, Args
+=head2 get URL, ARGS
 
-This will get the specified URL, using the arguments. See the documentation for
-C<method>.
+This will get the specified C<URL> with C<ARGS> as query parameters. See the
+documentation for C<method> about the format of C<URL>.
 
 =cut
 
@@ -304,9 +353,9 @@ sub get {
     $self->method('get', @_);
 }
 
-=head2 act Action, Args
+=head2 act ACTION, ARGS
 
-Perform the specified action, using the specified arguments.
+Perform C<ACTION>, using C<ARGS>. This does use the REST interface.
 
 =cut
 
@@ -317,9 +366,9 @@ sub act {
     return $self->post(["action", $action], @_);
 }
 
-=head2 create Model, FIELDS
+=head2 create MODEL, FIELDS
 
-Create a new object of type Model with the FIELDS set.
+Create a new object of type C<MODEL> with the C<FIELDS> set.
 
 =cut
 
@@ -330,9 +379,9 @@ sub create {
     return $self->post(["model", $model], @_);
 }
 
-=head2 delete Model, Key => Value
+=head2 delete MODEL, KEY => VALUE
 
-Find some Model where Key => Value and delete it
+Find some C<MODEL> where C<KEY> is C<VALUE> and delete it.
 
 =cut
 
@@ -345,9 +394,9 @@ sub delete {
     return $self->method(delete => ["model", $model, $key, $value]);
 }
 
-=head2 update Model, Key => Value, FIELDS
+=head2 update MODEL, KEY => VALUE, FIELDS
 
-Find some Model where Key => Value and set FIELDS on it.
+Find some C<MODEL> where C<KEY> is C<VALUE> and set C<FIELDS> on it.
 
 =cut
 
@@ -360,9 +409,9 @@ sub update {
     return $self->method(put => ["model", $model, $key, $value], @_);
 }
 
-=head2 read Model, Key => Value
+=head2 read MODEL, KEY => VALUE
 
-Find some Model where Key => Value and return it.
+Find some C<MODEL> where C<KEY> is C<VALUE> and return it.
 
 =cut
 
@@ -375,9 +424,9 @@ sub read {
     return $self->get(["model", $model, $key, $value]);
 }
 
-=head2 canonicalize_package Type, Package
+=head2 canonicalize_package TYPE, PACKAGE
 
-Prepends C<$appname.$Type.> to C<$Package> unless it's there already.
+Prepends C<APPNAME.TYPE.> to C<PACKAGE> unless it's there already.
 
 =cut
 
@@ -394,9 +443,9 @@ sub canonicalize_package {
     return "$appname.$type.$package";
 }
 
-=head2 canonicalize_action Action
+=head2 canonicalize_action ACTION
 
-Prepends C<$appname.Action.> unless it's there already.
+Prepends C<APPNAME.Action.> to C<ACTION> unless it's there already.
 
 =cut
 
@@ -405,9 +454,9 @@ sub canonicalize_action {
     return $self->canonicalize_package('Action', @_);
 }
 
-=head2 canonicalize_model Model
+=head2 canonicalize_model MODEL
 
-Prepends C<$appname.Model.> unless it's there already.
+Prepends C<APPNAME.Model.> to C<MODEL> unless it's there already.
 
 =cut
 
@@ -418,7 +467,7 @@ sub canonicalize_model {
 
 =head2 get_sid
 
-Retrieves the SID from the LWP::UserAgent object
+Retrieves the sid from the L<LWP::UserAgent> object.
 
 =cut
 
@@ -433,9 +482,9 @@ sub get_sid {
     $self->sid($sid);
 }
 
-=head2 join_url Fragments
+=head2 join_url FRAGMENTS
 
-Encodes the fragments and joins them with C</>.
+Encodes C<FRAGMENTS> and joins them with C</>.
 
 =cut
 
@@ -445,9 +494,9 @@ sub join_url {
     return join '/', map { $self->escape($_) } grep { defined } @_
 }
 
-=head2 escape Strings
+=head2 escape STRINGS
 
-URI escapes each string
+Returns C<STRINGS>, properly URI-escaped.
 
 =cut
 
@@ -459,18 +508,16 @@ sub escape {
            @_
 }
 
-=head2 load_date Date
+=head2 load_date DATE
 
-Loads a yyyy-mm-dd date into a L<DateTime> object.
+Loads C<DATE> (which must be of the form C<YYYY-MM-DD>) into a L<DateTime>
+object.
 
 =cut
 
 sub load_date {
     my $self = shift;
     my $ymd  = shift;
-
-    # XXX: this is a temporary hack until Hiveminder is pulled live
-    $ymd =~ s/ 00:00:00$//;
 
     my ($y, $m, $d) = $ymd =~ /^(\d\d\d\d)-(\d\d)-(\d\d)$/
         or confess "Invalid date passed to load_date: $ymd. Expected yyyy-mm-dd.";
@@ -483,9 +530,10 @@ sub load_date {
     );
 }
 
-=head2 email_eq Email, Email
+=head2 email_eq EMAIL, EMAIL
 
-Compares two email address. Returns true if they're equal, false if they're not.
+Compares the two email addresses. Returns true if they're equal, false if
+they're not.
 
 =cut
 
@@ -503,7 +551,7 @@ sub email_eq {
     # so, both are defined
 
     for ($a, $b) {
-        s/<nobody>/<nobody\@localhost>/;
+        $_ = 'nobody@localhost' if $_ eq 'nobody' || /<nobody>/;
         my ($email) = Email::Address->parse($_);
         $_ = lc($email->address);
     }
@@ -511,9 +559,9 @@ sub email_eq {
     return $a eq $b;
 }
 
-=head2 is_me Email
+=head2 is_me EMAIL
 
-Returns true if the given email looks like it is the current user's.
+Returns true if C<EMAIL> looks like it is the same as the current user's.
 
 =cut
 
@@ -608,9 +656,9 @@ sub config_permissions {
 
 =head2 read_config_file
 
-This transforms the config file to a hashref. It also does any postprocessing
+This transforms the config file into a hashref. It also does any postprocessing
 needed, such as transforming localhost to 127.0.0.1 (due to an obscure bug,
-probably in HTTP::Cookies)
+probably in HTTP::Cookies).
 
 =cut
 
@@ -660,7 +708,7 @@ sub prompt_login_info {
 Before we get started, please enter your @{[ $self->site ]}
 username and password.
 
-This information will be stored in @{[ $self->config_file ]}, 
+This information will be stored in @{[ $self->config_file ]},
 should you ever need to change it.
 
 END_WELCOME
@@ -693,13 +741,31 @@ END_WELCOME
     }
 }
 
+=head2 email_of ID
+
+Retrieve user C<ID>'s email address.
+
+=cut
+
+sub email_of {
+    my $self = shift;
+    my $id = shift;
+
+    my $user = $self->read(User => id => $id);
+    return $user->{email};
+}
+
 =head1 SEE ALSO
 
 L<Jifty>, L<Net::Hiveminder>
 
 =head1 AUTHOR
 
-Shawn M Moore, C<< <sartak at gmail.com> >>
+Shawn M Moore, C<< <sartak at bestpractical.com> >>
+
+=head1 CONTRIBUTORS
+
+Andrew Sterling Hanenkamp, C<< <hanenkamp@gmail.com> >>
 
 =head1 BUGS
 

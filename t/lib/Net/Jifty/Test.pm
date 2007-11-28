@@ -5,6 +5,7 @@ extends 'Net::Jifty';
 
 use Test::MockObject;
 
+our $content_type = "text/x-yaml";
 our $content = << "YAML";
 ---
 fnord:
@@ -31,8 +32,9 @@ has '+ua' => (
         # the result object. change $Net::Jifty::Test::content to change the
         # results
         my $res = Test::MockObject->new;
-        $res->set_bound(is_success => \$content);
-        $res->set_bound(content    => \$content);
+        $res->set_bound(is_success   => \$content);
+        $res->set_bound(content      => \$content);
+        $res->set_bound(content_type => \$content_type);
 
         # the cookie object. the cookie name is hardcoded to JIFTY_SID
         my $cookie = Test::MockObject->new;
@@ -40,7 +42,7 @@ has '+ua' => (
         $cookie->set_true('set_cookie');
 
         my $mock = Test::MockObject->new;
-        for (qw/get post put delete head/) {
+        for (qw/get post head request/) {
             $mock->set_always($_ => $res);
         }
         $mock->set_always(cookie_jar => $cookie);

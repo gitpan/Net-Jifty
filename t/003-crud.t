@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use Test::More tests => 13;
+use Test::More tests => 15;
 use lib 't/lib';
 use Net::Jifty::Test;
 
@@ -28,15 +28,17 @@ is_deeply($args->[1], 'http://jifty.org/=/model/JiftyApp.Model.Foo/a/b.yml', 'co
 $j->ua->clear;
 $j->update("Foo", a => 'b', c => 'C', d => 'e');
 ($name, $args) = $j->ua->next_call;
-is($name, 'put', 'used put for update');
-is_deeply($args->[1], 'http://jifty.org/=/model/JiftyApp.Model.Foo/a/b.yml', 'correct URL');
-is_deeply($args->[2], {c => 'C', d => 'e'}, 'correct arguments');
+is($name, 'request', 'used request for update');
+isa_ok($args->[1], 'HTTP::Request', 'got an HTTP::Request object');
+is($args->[1]->uri, 'http://jifty.org/=/model/JiftyApp.Model.Foo/a/b.yml', 'correct URL');
+like($args->[1]->content, qr/^(?:c=C&d=e|d=e&c=C)$/, 'correct arguments');
 
 $j->ua->clear;
 $j->delete("Foo", '"' => '?');
 ($name, $args) = $j->ua->next_call;
-is($name, 'delete', 'used delete for delete');
-is_deeply($args->[1], 'http://jifty.org/=/model/JiftyApp.Model.Foo/%22/%3F.yml', 'correct URL');
+is($name, 'request', 'used request for delete');
+isa_ok($args->[1], 'HTTP::Request', 'got an HTTP::Request object');
+is($args->[1]->uri, 'http://jifty.org/=/model/JiftyApp.Model.Foo/%22/%3F.yml', 'correct URL');
 
 $j->ua->clear;
 $j->act("Foo", '"' => '?');

@@ -26,6 +26,11 @@ DESCRIPTION
     You can use this module directly, but you'll be better off subclassing
     it, such as what we've done for Net::Hiveminder.
 
+    This module also provides a number of convenient methods for writing
+    short scripts. For example, passing "use_config => 1" to "new" will look
+    at the config file for the username and password (or SID) of the user.
+    If neither is available, it will prompt the user for them.
+
   BUILD
     Each Net::Jifty object will do the following upon creation:
 
@@ -42,18 +47,27 @@ DESCRIPTION
     This is called automatically when each Net::Jifty object is constructed
     (unless a session ID is passed in).
 
-  call Action, Args
-    This uses the Jifty "web services" API to perform an action. This is NOT
-    the REST interface, though it resembles it to some degree.
+  call ACTION, ARGS
+    This uses the Jifty "web services" API to perform "ACTION". This is
+    *not* the REST interface, though it resembles it to some degree.
 
     This module currently only uses this to log in.
 
-  method Method, URL[, Args]
+  form_url_encoded_args ARGS
+    This will take a hash containing arguments and convert those arguments
+    into URL encoded form. I.e., (x => 1, y => 2, z => 3) becomes:
+
+      x=1&y=2&z=3
+
+    These are then ready to be appened to the URL on a GET or placed into
+    the content of a PUT.
+
+  method METHOD, URL[, ARGS]
     This will perform a GET, POST, PUT, DELETE, etc using the internal
     LWP::UserAgent object.
 
-    Your URL may be a string or an array reference (which will have its
-    parts properly escaped and joined with "/"). Your URL already has
+    "URL" may be a string or an array reference (which will have its parts
+    properly escaped and joined with "/"). "URL" already has
     "http://your.site/=/" prepended to it, and ".yml" appended to it, so you
     only need to pass something like "model/YourApp.Model.Foo/name", or
     "[qw/model YourApp.Model.Foo name]".
@@ -61,56 +75,57 @@ DESCRIPTION
     This will return the data structure returned by the Jifty application,
     or throw an error.
 
-  post URL, Args
-    This will post the arguments to the specified URL. See the documentation
-    for "method".
+  post URL, ARGS
+    This will post "ARGS" to "URL". See the documentation for "method" about
+    the format of "URL".
 
-  get URL, Args
-    This will get the specified URL, using the arguments. See the
-    documentation for "method".
+  get URL, ARGS
+    This will get the specified "URL" with "ARGS" as query parameters. See
+    the documentation for "method" about the format of "URL".
 
-  act Action, Args
-    Perform the specified action, using the specified arguments.
+  act ACTION, ARGS
+    Perform "ACTION", using "ARGS". This does use the REST interface.
 
-  create Model, FIELDS
-    Create a new object of type Model with the FIELDS set.
+  create MODEL, FIELDS
+    Create a new object of type "MODEL" with the "FIELDS" set.
 
-  delete Model, Key => Value
-    Find some Model where Key => Value and delete it
+  delete MODEL, KEY => VALUE
+    Find some "MODEL" where "KEY" is "VALUE" and delete it.
 
-  update Model, Key => Value, FIELDS
-    Find some Model where Key => Value and set FIELDS on it.
+  update MODEL, KEY => VALUE, FIELDS
+    Find some "MODEL" where "KEY" is "VALUE" and set "FIELDS" on it.
 
-  read Model, Key => Value
-    Find some Model where Key => Value and return it.
+  read MODEL, KEY => VALUE
+    Find some "MODEL" where "KEY" is "VALUE" and return it.
 
-  canonicalize_package Type, Package
-    Prepends "$appname.$Type." to $Package unless it's there already.
+  canonicalize_package TYPE, PACKAGE
+    Prepends "APPNAME.TYPE." to "PACKAGE" unless it's there already.
 
-  canonicalize_action Action
-    Prepends "$appname.Action." unless it's there already.
+  canonicalize_action ACTION
+    Prepends "APPNAME.Action." to "ACTION" unless it's there already.
 
-  canonicalize_model Model
-    Prepends "$appname.Model." unless it's there already.
+  canonicalize_model MODEL
+    Prepends "APPNAME.Model." to "MODEL" unless it's there already.
 
   get_sid
-    Retrieves the SID from the LWP::UserAgent object
+    Retrieves the sid from the LWP::UserAgent object.
 
-  join_url Fragments
-    Encodes the fragments and joins them with "/".
+  join_url FRAGMENTS
+    Encodes "FRAGMENTS" and joins them with "/".
 
-  escape Strings
-    URI escapes each string
+  escape STRINGS
+    Returns "STRINGS", properly URI-escaped.
 
-  load_date Date
-    Loads a yyyy-mm-dd date into a DateTime object.
+  load_date DATE
+    Loads "DATE" (which must be of the form "YYYY-MM-DD") into a DateTime
+    object.
 
-  email_eq Email, Email
-    Compares two email address. Returns true if they're equal, false if
-    they're not.
+  email_eq EMAIL, EMAIL
+    Compares the two email addresses. Returns true if they're equal, false
+    if they're not.
 
-  is_me Email
-    Returns true if the given email looks like it is the current user's.
+  is_me EMAIL
+    Returns true if "EMAIL" looks like it is the same as the current user's.
 
   load_config
     This will return a hash reference of the user's preferences. Because
@@ -132,9 +147,9 @@ DESCRIPTION
     others.
 
   read_config_file
-    This transforms the config file to a hashref. It also does any
+    This transforms the config file into a hashref. It also does any
     postprocessing needed, such as transforming localhost to 127.0.0.1 (due
-    to an obscure bug, probably in HTTP::Cookies)
+    to an obscure bug, probably in HTTP::Cookies).
 
   write_config_file
     This will write the config to disk. This is usually only done when a sid
@@ -144,11 +159,17 @@ DESCRIPTION
     This will ask the user for her email and password. It may do so
     repeatedly until login is successful.
 
+  email_of ID
+    Retrieve user "ID"'s email address.
+
 SEE ALSO
     Jifty, Net::Hiveminder
 
 AUTHOR
-    Shawn M Moore, "<sartak at gmail.com>"
+    Shawn M Moore, "<sartak at bestpractical.com>"
+
+CONTRIBUTORS
+    Andrew Sterling Hanenkamp, "<hanenkamp@gmail.com>"
 
 BUGS
     Please report any bugs or feature requests to "bug-net-jifty at

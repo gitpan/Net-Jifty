@@ -1,6 +1,6 @@
 --- 
 abstract: interface to online Jifty applications
-author: Shawn M Moore, C<< <sartak at gmail.com> >>
+author: Shawn M Moore, C<< <sartak at bestpractical.com> >>
 build_requires: 
   Test::MockObject: 0
   Test::More: 0
@@ -24,4 +24,4 @@ requires:
   Term::ReadKey: 0
   URI: 0
   YAML: 0
-version: 0.02
+version: 0.03
