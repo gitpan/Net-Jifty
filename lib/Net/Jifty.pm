@@ -16,11 +16,11 @@ Net::Jifty - interface to online Jifty applications
 
 =head1 VERSION
 
-Version 0.03 released 28 Nov 07
+Version 0.04 released 07 Dec 08
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -58,6 +58,15 @@ has site => (
     isa           => 'Str',
     required      => 1,
     documentation => "The URL of your application",
+    trigger       => sub {
+        # this canonicalizes localhost to 127.0.0.1 because of an (I think)
+        # HTTP::Cookies bug. cookies aren't sent out for localhost.
+        my ($self, $site, $attr) = @_;
+
+        if ($site =~ s/\blocalhost\b/127.0.0.1/) {
+            $attr->set_value($self, $site);
+        }
+    },
 );
 
 has cookie_name => (
@@ -280,27 +289,19 @@ sub method {
     # remove trailing /
     $url =~ s{/+$}{};
 
+    my $uri = $self->site . '/=/' . $url . '.yml';
+
     my $res;
 
     if ($method eq 'get' || $method eq 'head') {
-        my $uri = $self->site . '/=/' . $url . '.yml';
-
         $uri .= '?' . $self->form_url_encoded_args(%args)
             if keys %args;
 
         $res = $self->ua->$method($uri);
     }
-    elsif ($method eq 'post') {
-        $res = $self->ua->$method(
-            $self->site . '/=/' . $url . '.yml',
-            \%args
-        );
-    }
-
-    # LWP::UserAgent provides direct methods only for get, head, and post
     else {
         my $req = HTTP::Request->new(
-            uc($method) => $self->site . '/=/' . $url . '.yml'
+            uc($method) => $uri,
         );
 
         if (keys %args) {
@@ -424,6 +425,21 @@ sub read {
     return $self->get(["model", $model, $key, $value]);
 }
 
+=head2 search MODEL, FIELDS[, OUTCOLUMN]
+
+Searches for all objects of type C<MODEL> that satisfy C<FIELDS>. The optional
+C<OUTCOLUMN> defines the output column, in case you don't want the entire
+records.
+
+=cut
+
+sub search {
+    my $self = shift;
+    my $model = $self->canonicalize_model(shift);
+
+    return $self->get(["search", $model, @_]);
+}
+
 =head2 canonicalize_package TYPE, PACKAGE
 
 Prepends C<APPNAME.TYPE.> to C<PACKAGE> unless it's there already.
@@ -519,7 +535,7 @@ sub load_date {
     my $self = shift;
     my $ymd  = shift;
 
-    my ($y, $m, $d) = $ymd =~ /^(\d\d\d\d)-(\d\d)-(\d\d)$/
+    my ($y, $m, $d) = $ymd =~ /^(\d\d\d\d)-(\d\d)-(\d\d)(?: 00:00:00)?$/
         or confess "Invalid date passed to load_date: $ymd. Expected yyyy-mm-dd.";
 
     return DateTime->new(

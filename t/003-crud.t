@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use Test::More tests => 15;
+use Test::More tests => 19;
 use lib 't/lib';
 use Net::Jifty::Test;
 
@@ -15,9 +15,11 @@ my %args = (
 
 $j->create("Foo", %args);
 my ($name, $args) = $j->ua->next_call;
-is($name, 'post', 'used post for create');
-is_deeply($args->[1], 'http://jifty.org/=/model/JiftyApp.Model.Foo.yml', 'correct URL');
-is_deeply($args->[2], \%args, 'correct arguments');
+is($name, 'request', 'used request for create');
+isa_ok($args->[1], 'HTTP::Request', 'argument is an HTTP request');
+is($args->[1]->method, 'POST', 'correct method (POST)');
+is($args->[1]->uri, 'http://jifty.org/=/model/JiftyApp.Model.Foo.yml', 'correct URL');
+like($args->[1]->content, qr/^(a=b&c=d|c=d&a=b)$/, 'correct arguments');
 
 $j->ua->clear;
 $j->read("Foo", a => 'b');
@@ -43,7 +45,9 @@ is($args->[1]->uri, 'http://jifty.org/=/model/JiftyApp.Model.Foo/%22/%3F.yml', '
 $j->ua->clear;
 $j->act("Foo", '"' => '?');
 ($name, $args) = $j->ua->next_call;
-is($name, 'post', 'used post for act');
-is_deeply($args->[1], 'http://jifty.org/=/action/JiftyApp.Action.Foo.yml', 'correct URL');
-is_deeply($args->[2], {'"' => '?'}, 'correct arguments');
+is($name, 'request', 'used request for act');
+isa_ok($args->[1], 'HTTP::Request', 'argument is an HTTP request');
+is($args->[1]->method, 'POST', 'correct method (POST)');
+is($args->[1]->uri, 'http://jifty.org/=/action/JiftyApp.Action.Foo.yml', 'correct URL');
+is($args->[1]->content, '%22=%3F', 'correct argument');
 

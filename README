@@ -2,7 +2,7 @@ NAME
     Net::Jifty - interface to online Jifty applications
 
 VERSION
-    Version 0.02 released 21 Nov 07
+    Version 0.04 released 07 Dec 08
 
 SYNOPSIS
         use Net::Jifty;
@@ -97,6 +97,11 @@ DESCRIPTION
 
   read MODEL, KEY => VALUE
     Find some "MODEL" where "KEY" is "VALUE" and return it.
+
+  search MODEL, FIELDS[, OUTCOLUMN]
+    Searches for all objects of type "MODEL" that satisfy "FIELDS". The
+    optional "OUTCOLUMN" defines the output column, in case you don't want
+    the entire records.
 
   canonicalize_package TYPE, PACKAGE
     Prepends "APPNAME.TYPE." to "PACKAGE" unless it's there already.

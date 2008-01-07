@@ -1,5 +1,10 @@
 Revision history for Net-Jifty
 
+0.04    Mon Dec 7 15:28:23
+        Work around an HTTP::Cookies bug with 'localhost'
+        Add support for /=/search/
+        Fixes to create and act
+
 0.03    Wed Nov 28 17:03:17
         Fix support for DELETE/PUT (patch by HANENKAMP)
         Workaround for a Jifty redirect bug (patch by HANENKAMP)
