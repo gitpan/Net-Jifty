@@ -1,5 +1,10 @@
 Revision history for Net-Jifty
 
+0.05    Mon Dec 21 01:56:40
+        Removed canonicalize_action and canonicalize_model
+        Allow search arguments to be arrayrefs, to facilitate using hashes for
+            them. e.g: 'id => [1, 5]' is equivalent to 'id => 1, id => 5'
+
 0.04    Mon Dec 7 15:28:23
         Work around an HTTP::Cookies bug with 'localhost'
         Add support for /=/search/

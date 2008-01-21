@@ -2,7 +2,7 @@ NAME
     Net::Jifty - interface to online Jifty applications
 
 VERSION
-    Version 0.04 released 07 Dec 08
+    Version 0.05 released 21 Dec 08
 
 SYNOPSIS
         use Net::Jifty;
@@ -102,15 +102,6 @@ DESCRIPTION
     Searches for all objects of type "MODEL" that satisfy "FIELDS". The
     optional "OUTCOLUMN" defines the output column, in case you don't want
     the entire records.
-
-  canonicalize_package TYPE, PACKAGE
-    Prepends "APPNAME.TYPE." to "PACKAGE" unless it's there already.
-
-  canonicalize_action ACTION
-    Prepends "APPNAME.Action." to "ACTION" unless it's there already.
-
-  canonicalize_model MODEL
-    Prepends "APPNAME.Model." to "MODEL" unless it's there already.
 
   get_sid
     Retrieves the sid from the LWP::UserAgent object.

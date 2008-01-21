@@ -16,11 +16,11 @@ Net::Jifty - interface to online Jifty applications
 
 =head1 VERSION
 
-Version 0.04 released 07 Dec 08
+Version 0.05 released 21 Dec 08
 
 =cut
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 =head1 SYNOPSIS
 
@@ -362,7 +362,7 @@ Perform C<ACTION>, using C<ARGS>. This does use the REST interface.
 
 sub act {
     my $self   = shift;
-    my $action = $self->canonicalize_action(shift);
+    my $action = shift;
 
     return $self->post(["action", $action], @_);
 }
@@ -374,8 +374,8 @@ Create a new object of type C<MODEL> with the C<FIELDS> set.
 =cut
 
 sub create {
-    my $self = shift;
-    my $model = $self->canonicalize_model(shift);
+    my $self  = shift;
+    my $model = shift;
 
     return $self->post(["model", $model], @_);
 }
@@ -388,7 +388,7 @@ Find some C<MODEL> where C<KEY> is C<VALUE> and delete it.
 
 sub delete {
     my $self   = shift;
-    my $model  = $self->canonicalize_model(shift);
+    my $model  = shift;
     my $key    = shift;
     my $value  = shift;
 
@@ -403,7 +403,7 @@ Find some C<MODEL> where C<KEY> is C<VALUE> and set C<FIELDS> on it.
 
 sub update {
     my $self   = shift;
-    my $model  = $self->canonicalize_model(shift);
+    my $model  = shift;
     my $key    = shift;
     my $value  = shift;
 
@@ -418,7 +418,7 @@ Find some C<MODEL> where C<KEY> is C<VALUE> and return it.
 
 sub read {
     my $self   = shift;
-    my $model  = $self->canonicalize_model(shift);
+    my $model  = shift;
     my $key    = shift;
     my $value  = shift;
 
@@ -434,51 +434,27 @@ records.
 =cut
 
 sub search {
-    my $self = shift;
-    my $model = $self->canonicalize_model(shift);
+    my $self  = shift;
+    my $model = shift;
+    my @args;
 
-    return $self->get(["search", $model, @_]);
-}
+    while (@_) {
+        if (@_ == 1) {
+            push @args, shift;
+        }
+        else {
+            # id => [1,2,3] maps to id/1/id/2/id/3
+            if (ref($_[1]) eq 'ARRAY') {
+                push @args, map { $_[0] => $_ } @{ $_[1] };
+                splice @_, 0, 2;
+            }
+            else {
+                push @args, splice @_, 0, 2;
+            }
+        }
+    }
 
-=head2 canonicalize_package TYPE, PACKAGE
-
-Prepends C<APPNAME.TYPE.> to C<PACKAGE> unless it's there already.
-
-=cut
-
-sub canonicalize_package {
-    my $self    = shift;
-    my $type    = shift;
-    my $package = shift;
-
-    my $appname = $self->appname;
-
-    return $package
-        if $package =~ /^\Q$appname.$type./;
-
-    return "$appname.$type.$package";
-}
-
-=head2 canonicalize_action ACTION
-
-Prepends C<APPNAME.Action.> to C<ACTION> unless it's there already.
-
-=cut
-
-sub canonicalize_action {
-    my $self = shift;
-    return $self->canonicalize_package('Action', @_);
-}
-
-=head2 canonicalize_model MODEL
-
-Prepends C<APPNAME.Model.> to C<MODEL> unless it's there already.
-
-=cut
-
-sub canonicalize_model {
-    my $self = shift;
-    return $self->canonicalize_package('Model', @_);
+    return $self->get(["search", $model, @args]);
 }
 
 =head2 get_sid
