@@ -11,6 +11,9 @@ requires        'Encode';
 requires        'DateTime';
 requires        'Email::Address';
 requires        'Term::ReadKey';
+requires        'Path::Class';
+requires        'Cwd';
+requires        'Hash::Merge';
 
 build_requires  'Test::More';
 build_requires  'Test::MockObject';

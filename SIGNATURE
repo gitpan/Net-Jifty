@@ -14,33 +14,34 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 5e20591320b50115193e0ee2aae03461594faa49 Changes
-SHA1 584d02482ff591ad8bfe18a3e23d5a325676101c MANIFEST
-SHA1 da72130f1f2e01f58803d4bf45cde51d6ca9608c META.yml
-SHA1 c5aeed0fdec958de5961711ba67bcdcb2b4cbc2a Makefile.PL
-SHA1 95c2762aa21c7f09f3a7de50855a0aa0bb045792 README
+SHA1 77c76027fbd421bc817b10e7c2bd305c559324cb Changes
+SHA1 33c6e3757086d8ffd5dc63d9d17bc6ace3b4977d MANIFEST
+SHA1 88686df04b17683f40d823fc019ba9754dceead0 META.yml
+SHA1 3571065f9210794bb1cad35fd5657537bc7e1659 Makefile.PL
+SHA1 28cf5c15adac12fce88afdd715a1c450e8f9e9b8 README
 SHA1 603bb9de29fb8cba7f13409c546750972eff645d inc/Module/AutoInstall.pm
-SHA1 78edb89a439463e44c33a72bbee84c54d0dc8aaf inc/Module/Install.pm
-SHA1 ae32c02b539901de91f06366ce9bdbb7a7bd040b inc/Module/Install/AutoInstall.pm
-SHA1 8ea4e37df83fd0c1c050be5c8da75545c3828d9b inc/Module/Install/Base.pm
-SHA1 1da6031583c32f0d1ec073b8376102fc51427dcc inc/Module/Install/Can.pm
-SHA1 b779375b90c16af2f31f38a1dd2b5df223c7f2fb inc/Module/Install/Fetch.pm
-SHA1 6bf0d0d100b94d1a2ce64d010c8813dec26ac480 inc/Module/Install/Include.pm
-SHA1 2054450e1e9c1dd8056362bf4a64ae70d5d71476 inc/Module/Install/Makefile.pm
-SHA1 5d6189b2cad15cf9932a28faafd55130c8247e83 inc/Module/Install/Metadata.pm
-SHA1 02af973fae2ac3531fa6b704574b2b8cb2a08148 inc/Module/Install/Win32.pm
-SHA1 3a2eab96e91cca8d99938cda7791759ae9d97b3a inc/Module/Install/WriteAll.pm
-SHA1 eddacb8c61dffc31c4e66c4895f1f146f4b6429f lib/Net/Jifty.pm
+SHA1 7e2cfa1b9efe0d502ee57717649c90ba4bd28ba9 inc/Module/Install.pm
+SHA1 182a0df45b65151afdc2be0b7246a2d02d0f0567 inc/Module/Install/AutoInstall.pm
+SHA1 6e1392d80a0f239eecd5664f7f21f922cedb9329 inc/Module/Install/Base.pm
+SHA1 f69417fe831d9cc22a78f00a617afadceade4d81 inc/Module/Install/Can.pm
+SHA1 c61d02895330310048bf388881b5e2e064031561 inc/Module/Install/Fetch.pm
+SHA1 4933b00c3a646da8d223c6957f94552bbd62f8c6 inc/Module/Install/Include.pm
+SHA1 54fcbed19232ec959bb17cfb4410599afc7f0779 inc/Module/Install/Makefile.pm
+SHA1 7d3be9b158e37b2b2c22084740099955623b1d56 inc/Module/Install/Metadata.pm
+SHA1 0a8b66180229ba2f9deaea1fedd0aacf7a7ace6b inc/Module/Install/Win32.pm
+SHA1 d3352eb33fe43a5f3ead513f645224fe34d73bc9 inc/Module/Install/WriteAll.pm
+SHA1 3345adbcc19dac0fc6084d0836ba290eb8787d13 lib/Net/Jifty.pm
 SHA1 d82ea49d1cb9b8cda33214dcd82851835a44efea t/000-load.t
 SHA1 72071d94a22f5797e5f6bbf135d84d03a8eaa84b t/001-login.t
 SHA1 e8dd1626d4ac55f9917aecfc6177d3df8040c101 t/002-method.t
 SHA1 987d9fb3decf47c1992a29c31c96222bfb1cc380 t/003-crud.t
 SHA1 0ed91f86dac1087841dfb7aa187f3335d19122cf t/004-search.t
+SHA1 c21ebda3ce8e8e6653a86bdfaf8b18facf443061 t/005-validate.t
 SHA1 2711c8f993f7919e011ab8c080e8031fa53b6f4d t/lib/Net/Jifty/Test.pm
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.4.7 (Darwin)
 
-iD8DBQFHlEKXsxfQtHhyRPoRAvfwAKCKS8IN+rI6V4F/s2zcMvK/Y3lgVACfaccn
-E98OE8AUpNwLyOOjc6aVQic=
-=pcHQ
+iD8DBQFH3qhIsxfQtHhyRPoRAro3AJ4//qdVc1GuZQQprgN9LJ49Mv/X3gCbBSb+
+XRMSNgFkk0aO8X9i7znnsDE=
+=eR2Y
 -----END PGP SIGNATURE-----

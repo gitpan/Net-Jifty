@@ -1,14 +1,22 @@
 #!/usr/bin/env perl
 package Net::Jifty;
 use Moose;
-use YAML;
-use Encode;
-use URI;
+
 use LWP::UserAgent;
+use HTTP::Request;
+use URI;
+
+use YAML;
+use Hash::Merge;
+
+use Encode;
+use Fcntl qw(:mode);
+
+use Cwd;
+use Path::Class;
+
 use DateTime;
 use Email::Address;
-use Fcntl qw(:mode);
-use HTTP::Request;
 
 =head1 NAME
 
@@ -16,23 +24,31 @@ Net::Jifty - interface to online Jifty applications
 
 =head1 VERSION
 
-Version 0.05 released 21 Dec 08
+Version 0.06 released 17 Mar 07
 
 =cut
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 =head1 SYNOPSIS
 
     use Net::Jifty;
-    my $j = Net::Jifty->new(site => 'http://mushroom.mu/', cookie_name => 'MUSHROOM_KINGDOM_SID', appname => 'MushroomKingdom', email => 'god@mushroom.mu', password => 'melange');
+    my $j = Net::Jifty->new(
+        site        => 'http://mushroom.mu/',
+        cookie_name => 'MUSHROOM_KINGDOM_SID',
+        email       => 'god@mushroom.mu',
+        password    => 'melange',
+    );
 
     # the story begins
     $j->create(Hero => name => 'Mario', job => 'Plumber');
 
-    # find the hero whose job is Plumber and change his name to Luigi and color
-    # to green
-    $j->update(Hero => job => 'Plumber', name => 'Luigi', color => 'Green');
+    # find the hero whose job is Plumber and change his name to Luigi
+    # and color to green
+    $j->update(Hero => job => 'Plumber',
+        name  => 'Luigi',
+        color => 'Green',
+    );
 
     # win!
     $j->delete(Enemy => name => 'Bowser');
@@ -79,7 +95,6 @@ has cookie_name => (
 has appname => (
     is            => 'rw',
     isa           => 'Str',
-    required      => 1,
     documentation => "The name of the application, as it is known to Jifty",
 );
 
@@ -147,6 +162,27 @@ has config => (
     isa     => 'HashRef',
     default => sub { {} },
     documentation => "Storage for the user's config",
+);
+
+has use_filters => (
+    is            => 'rw',
+    isa           => 'Bool',
+    default       => 1,
+    documentation => "Whether or not to use config files in the user's directory tree",
+);
+
+has filter_file => (
+    is            => 'rw',
+    isa           => 'Str',
+    default       => ".jifty",
+    documentation => "The filename to look for in each parent directory",
+);
+
+has strict_arguments => (
+    is            => 'rw',
+    isa           => 'Bool',
+    default       => 0,
+    documentation => "Check to make sure mandatory arguments are provided, and no unknown arguments are included",
 );
 
 =head2 BUILD
@@ -364,6 +400,9 @@ sub act {
     my $self   = shift;
     my $action = shift;
 
+    $self->validate_action_args($action => @_)
+        if $self->strict_arguments;
+
     return $self->post(["action", $action], @_);
 }
 
@@ -376,6 +415,9 @@ Create a new object of type C<MODEL> with the C<FIELDS> set.
 sub create {
     my $self  = shift;
     my $model = shift;
+
+    $self->validate_action_args([create => $model] => @_)
+        if $self->strict_arguments;
 
     return $self->post(["model", $model], @_);
 }
@@ -392,6 +434,9 @@ sub delete {
     my $key    = shift;
     my $value  = shift;
 
+    $self->validate_action_args([delete => $model] => $key => $value)
+        if $self->strict_arguments;
+
     return $self->method(delete => ["model", $model, $key, $value]);
 }
 
@@ -406,6 +451,9 @@ sub update {
     my $model  = shift;
     my $key    = shift;
     my $value  = shift;
+
+    $self->validate_action_args([update => $model] => $key => $value, @_)
+        if $self->strict_arguments;
 
     return $self->method(put => ["model", $model, $key, $value], @_);
 }
@@ -455,6 +503,55 @@ sub search {
     }
 
     return $self->get(["search", $model, @args]);
+}
+
+=head2 validate_action_args action => args
+
+Validates the given action, to check to make sure that all mandatory arguments
+are given and that no unknown arguments are given.
+
+You may give action as a string, which will be interpreted as the action name;
+or as an array reference for CRUD - the first element will be the action
+(create, update, or delete) and the second element will be the model name.
+
+This will throw an error or if validation succeeds, will return 1.
+
+=cut
+
+sub validate_action_args {
+    my $self   = shift;
+    my $action = shift;
+    my %args   = @_;
+
+    my $name;
+    if (ref($action) eq 'ARRAY') {
+        my ($operation, $model) = @$action;
+
+        # drop MyApp::Model::
+        $model =~ s/.*:://;
+
+        confess "Invalid model operation: $operation. Expected 'create', 'update', or 'delete'." unless $operation =~ m{^(?:create|update|delete)$}i;
+
+        $name = ucfirst(lc $operation) . $model;
+    }
+    else {
+        $name = $action;
+    }
+
+    my $action_args = $self->get("action/$name");
+
+    for my $arg (keys %$action_args) {
+        confess "Mandatory argument '$arg' not given for action $name."
+            if $action_args->{$arg}{mandatory} && !defined($args{$arg});
+        delete $args{$arg};
+    }
+
+    if (keys %args) {
+        confess "Unknown arguments given for action $name: "
+              . join(', ', keys %args);
+    }
+
+    return 1;
 }
 
 =head2 get_sid
@@ -731,6 +828,49 @@ END_WELCOME
 
         print "That combination doesn't seem to be correct. Try again?\n";
     }
+}
+
+=head2 filter_config [DIRECTORY] -> HASH
+
+Looks at the (given or) current directory, and all parent directories, for
+files named C<< $self->filter_file >>. Each file is YAML. The contents of the
+files will be merged (such that child settings override parent settings), and
+the merged hash will be returned.
+
+What this is used for is up to the application or subclasses. L<Net::Jifty>
+doesn't look at this at all, but it may in the future (such as for email and
+password).
+
+=cut
+
+sub filter_config {
+    my $self = shift;
+
+    return {} unless $self->use_filters;
+
+    my $all_config = {};
+
+    my $dir = dir(shift || getcwd);
+
+    my $old_behavior = Hash::Merge::get_behavior;
+    Hash::Merge::set_behavior('RIGHT_PRECEDENT');
+
+    while (1) {
+        my $file = $dir->file( $self->filter_file )->stringify;
+
+        if (-r $file) {
+            my $this_config = YAML::LoadFile($file);
+            $all_config = Hash::Merge::merge($this_config, $all_config);
+        }
+
+        my $parent = $dir->parent;
+        last if $parent eq $dir;
+        $dir = $parent;
+    }
+
+    Hash::Merge::set_behavior($old_behavior);
+
+    return $all_config;
 }
 
 =head2 email_of ID

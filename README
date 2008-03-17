@@ -2,18 +2,26 @@ NAME
     Net::Jifty - interface to online Jifty applications
 
 VERSION
-    Version 0.05 released 21 Dec 08
+    Version 0.06 released 17 Mar 07
 
 SYNOPSIS
         use Net::Jifty;
-        my $j = Net::Jifty->new(site => 'http://mushroom.mu/', cookie_name => 'MUSHROOM_KINGDOM_SID', appname => 'MushroomKingdom', email => 'god@mushroom.mu', password => 'melange');
+        my $j = Net::Jifty->new(
+            site        => 'http://mushroom.mu/',
+            cookie_name => 'MUSHROOM_KINGDOM_SID',
+            email       => 'god@mushroom.mu',
+            password    => 'melange',
+        );
 
         # the story begins
         $j->create(Hero => name => 'Mario', job => 'Plumber');
 
-        # find the hero whose job is Plumber and change his name to Luigi and color
-        # to green
-        $j->update(Hero => job => 'Plumber', name => 'Luigi', color => 'Green');
+        # find the hero whose job is Plumber and change his name to Luigi
+        # and color to green
+        $j->update(Hero => job => 'Plumber',
+            name  => 'Luigi',
+            color => 'Green',
+        );
 
         # win!
         $j->delete(Enemy => name => 'Bowser');
@@ -103,6 +111,17 @@ DESCRIPTION
     optional "OUTCOLUMN" defines the output column, in case you don't want
     the entire records.
 
+  validate_action_args action => args
+    Validates the given action, to check to make sure that all mandatory
+    arguments are given and that no unknown arguments are given.
+
+    You may give action as a string, which will be interpreted as the action
+    name; or as an array reference for CRUD - the first element will be the
+    action (create, update, or delete) and the second element will be the
+    model name.
+
+    This will throw an error or if validation succeeds, will return 1.
+
   get_sid
     Retrieves the sid from the LWP::UserAgent object.
 
@@ -154,6 +173,16 @@ DESCRIPTION
   prompt_login_info
     This will ask the user for her email and password. It may do so
     repeatedly until login is successful.
+
+  filter_config [DIRECTORY] -> HASH
+    Looks at the (given or) current directory, and all parent directories,
+    for files named "$self->filter_file". Each file is YAML. The contents of
+    the files will be merged (such that child settings override parent
+    settings), and the merged hash will be returned.
+
+    What this is used for is up to the application or subclasses. Net::Jifty
+    doesn't look at this at all, but it may in the future (such as for email
+    and password).
 
   email_of ID
     Retrieve user "ID"'s email address.

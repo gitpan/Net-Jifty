@@ -1,11 +1,12 @@
 --- 
 abstract: interface to online Jifty applications
-author: Shawn M Moore, C<< <sartak at bestpractical.com> >>
+author: 
+  - Shawn M Moore, C<< <sartak at bestpractical.com> >>
 build_requires: 
   Test::MockObject: 0
   Test::More: 0
 distribution_type: module
-generated_by: Module::Install version 0.67
+generated_by: Module::Install version 0.68
 license: perl
 meta-spec: 
   url: http://module-build.sourceforge.net/META-spec-v1.3.html
@@ -16,12 +17,15 @@ no_index:
     - inc
     - t
 requires: 
+  Cwd: 0
   DateTime: 0
   Email::Address: 0
   Encode: 0
+  Hash::Merge: 0
   LWP::UserAgent: 0
   Moose: 0
+  Path::Class: 0
   Term::ReadKey: 0
   URI: 0
   YAML: 0
-version: 0.05
+version: 0.06
