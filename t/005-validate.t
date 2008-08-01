@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use Test::More tests => 20;
+use Test::More tests => 31;
 use lib 't/lib';
 use Net::Jifty::Test;
 
@@ -25,6 +25,7 @@ my ($name, $args) = $j->ua->next_call;
 is($name, 'get', 'used get for validation');
 is($args->[1], 'http://jifty.org/=/action/CreateFoo.yml', 'correct URL');
 $j->ua->clear;
+ok(delete $j->action_specs->{"CreateFoo"}, "cached spec");
 
 $Net::Jifty::Test::content = << "YAML";
 ---
@@ -39,6 +40,7 @@ $j->validate_action_args(["create", "Jifty::Model::Foo"], %args);
 is($name, 'get', 'used get for validation');
 is($args->[1], 'http://jifty.org/=/action/CreateFoo.yml', 'correct URL');
 $j->ua->clear;
+ok(delete $j->action_specs->{"CreateFoo"}, "cached spec");
 
 $Net::Jifty::Test::content = << "YAML";
 ---
@@ -57,6 +59,7 @@ like($@, qr/^Mandatory argument 'b' not given for action CreateFoo\. at /);
 is($name, 'get', 'used get for validation');
 is($args->[1], 'http://jifty.org/=/action/CreateFoo.yml', 'correct URL');
 $j->ua->clear;
+ok(delete $j->action_specs->{"CreateFoo"}, "cached spec");
 
 $Net::Jifty::Test::content = << "YAML";
 ---
@@ -72,6 +75,7 @@ like($@, qr/^Unknown arguments given for action CreateFoo: c at /);
 is($name, 'get', 'used get for validation');
 is($args->[1], 'http://jifty.org/=/action/CreateFoo.yml', 'correct URL');
 $j->ua->clear;
+ok(delete $j->action_specs->{"CreateFoo"}, "cached spec");
 
 
 $j = Net::Jifty::Test->new(strict_arguments => 1);
@@ -88,6 +92,7 @@ like($@, qr/^Unknown arguments given for action CreateFoo: a at /);
 is($name, 'get', 'used get for validation');
 is($args->[1], 'http://jifty.org/=/action/CreateFoo.yml', 'correct URL');
 $j->ua->clear;
+ok(delete $j->action_specs->{"CreateFoo"}, "cached spec");
 
 $Net::Jifty::Test::content = << "YAML";
 ---
@@ -99,9 +104,20 @@ $j->create("Jifty::Model::Foo", %args);
 ($name, $args) = $j->ua->next_call;
 is($name, 'get', 'used get for validation');
 is($args->[1], 'http://jifty.org/=/action/CreateFoo.yml', 'correct URL');
+ok($j->action_specs->{"CreateFoo"}, "cached spec");
 
 ($name, $args) = $j->ua->next_call;
 is($name, 'request', 'used request for create');
+isa_ok($args->[1], 'HTTP::Request', 'argument is an HTTP request');
+is($args->[1]->method, 'POST', 'correct method (POST)');
+is($args->[1]->uri, 'http://jifty.org/=/model/Jifty%3A%3AModel%3A%3AFoo.yml', 'correct URL');
+like($args->[1]->content, qr/^(a=b&c=d|c=d&a=b)$/, 'correct arguments');
+
+$j->ua->clear;
+
+$j->create("Jifty::Model::Foo", %args);
+($name, $args) = $j->ua->next_call;
+is($name, 'request', 'used cache version of action spec');
 isa_ok($args->[1], 'HTTP::Request', 'argument is an HTTP request');
 is($args->[1]->method, 'POST', 'correct method (POST)');
 is($args->[1]->uri, 'http://jifty.org/=/model/Jifty%3A%3AModel%3A%3AFoo.yml', 'correct URL');

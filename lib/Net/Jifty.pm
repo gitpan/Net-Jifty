@@ -2,6 +2,8 @@
 package Net::Jifty;
 use Moose;
 
+our $VERSION = '0.07';
+
 use LWP::UserAgent;
 use HTTP::Request;
 use URI;
@@ -15,59 +17,7 @@ use Fcntl qw(:mode);
 use Cwd;
 use Path::Class;
 
-use DateTime;
 use Email::Address;
-
-=head1 NAME
-
-Net::Jifty - interface to online Jifty applications
-
-=head1 VERSION
-
-Version 0.06 released 17 Mar 07
-
-=cut
-
-our $VERSION = '0.06';
-
-=head1 SYNOPSIS
-
-    use Net::Jifty;
-    my $j = Net::Jifty->new(
-        site        => 'http://mushroom.mu/',
-        cookie_name => 'MUSHROOM_KINGDOM_SID',
-        email       => 'god@mushroom.mu',
-        password    => 'melange',
-    );
-
-    # the story begins
-    $j->create(Hero => name => 'Mario', job => 'Plumber');
-
-    # find the hero whose job is Plumber and change his name to Luigi
-    # and color to green
-    $j->update(Hero => job => 'Plumber',
-        name  => 'Luigi',
-        color => 'Green',
-    );
-
-    # win!
-    $j->delete(Enemy => name => 'Bowser');
-
-=head1 DESCRIPTION
-
-L<Jifty> is a full-stack web framework. It provides an optional REST interface
-for applications. Using this module, you can interact with that REST
-interface to write client-side utilities.
-
-You can use this module directly, but you'll be better off subclassing it, such
-as what we've done for L<Net::Hiveminder>.
-
-This module also provides a number of convenient methods for writing short
-scripts. For example, passing C<< use_config => 1 >> to C<new> will look at
-the config file for the username and password (or SID) of the user. If neither
-is available, it will prompt the user for them.
-
-=cut
 
 has site => (
     is            => 'rw',
@@ -185,23 +135,19 @@ has strict_arguments => (
     documentation => "Check to make sure mandatory arguments are provided, and no unknown arguments are included",
 );
 
-=head2 BUILD
+has action_specs => (
+    is            => 'rw',
+    isa           => 'HashRef[HashRef]',
+    default       => sub { {} },
+    documentation => "The cache for action specifications",
+);
 
-Each L<Net::Jifty> object will do the following upon creation:
-
-=over 4
-
-=item Read config
-
-..but only if you C<use_config> is set to true.
-
-=item Log in
-
-..unless a sid is available, in which case we're already logged in.
-
-=back
-
-=cut
+has model_specs => (
+    is            => 'rw',
+    isa           => 'HashRef[HashRef]',
+    default       => sub { {} },
+    documentation => "The cache for model specifications",
+);
 
 sub BUILD {
     my $self = shift;
@@ -212,16 +158,6 @@ sub BUILD {
     $self->login
         unless $self->sid;
 }
-
-=head2 login
-
-This assumes your site is using L<Jifty::Plugin::Authentication::Password>.
-If that's not the case, override this in your subclass.
-
-This is called automatically when each L<Net::Jifty> object is constructed
-(unless a session ID is passed in).
-
-=cut
 
 sub login {
     my $self = shift;
@@ -245,15 +181,6 @@ sub login {
     return 1;
 }
 
-=head2 call ACTION, ARGS
-
-This uses the Jifty "web services" API to perform C<ACTION>. This is I<not> the
-REST interface, though it resembles it to some degree.
-
-This module currently only uses this to log in.
-
-=cut
-
 sub call {
     my $self    = shift;
     my $action  = shift;
@@ -274,22 +201,11 @@ sub call {
     }
 }
 
-=head2 form_url_encoded_args ARGS
-
-This will take a hash containing arguments and convert those arguments into URL encoded form. I.e., (x => 1, y => 2, z => 3) becomes:
-
-  x=1&y=2&z=3
-
-These are then ready to be appened to the URL on a GET or placed into the content of a PUT.
-
-=cut
-
 sub form_url_encoded_args {
     my $self = shift;
-    my %args = @_;
 
     my $uri = '';
-    while (my ($key, $value) = each %args) {
+    while (my ($key, $value) = splice @_, 0, 2) {
         $uri .= join('=', map { $self->escape($_) } $key, $value) . '&';
     }
     chop $uri;
@@ -297,27 +213,11 @@ sub form_url_encoded_args {
     return $uri;
 }
 
-=head2 method METHOD, URL[, ARGS]
-
-This will perform a GET, POST, PUT, DELETE, etc using the internal
-L<LWP::UserAgent> object.
-
-C<URL> may be a string or an array reference (which will have its parts
-properly escaped and joined with C</>). C<URL> already has
-C<http://your.site/=/> prepended to it, and C<.yml> appended to it, so you only
-need to pass something like C<model/YourApp.Model.Foo/name>, or
-C<[qw/model YourApp.Model.Foo name]>.
-
-This will return the data structure returned by the Jifty application, or throw
-an error.
-
-=cut
-
 sub method {
     my $self   = shift;
     my $method = lc(shift);
     my $url    = shift;
-    my %args   = @_;
+    my @args   = @_;
 
     $url = $self->join_url(@$url)
         if ref($url) eq 'ARRAY';
@@ -330,8 +230,8 @@ sub method {
     my $res;
 
     if ($method eq 'get' || $method eq 'head') {
-        $uri .= '?' . $self->form_url_encoded_args(%args)
-            if keys %args;
+        $uri .= '?' . $self->form_url_encoded_args(@args)
+            if @args;
 
         $res = $self->ua->$method($uri);
     }
@@ -340,8 +240,8 @@ sub method {
             uc($method) => $uri,
         );
 
-        if (keys %args) {
-            my $content = $self->form_url_encoded_args(%args);
+        if (@args) {
+            my $content = $self->form_url_encoded_args(@args);
             $req->header('Content-type' => 'application/x-www-form-urlencoded');
             $req->content($content);
         }
@@ -366,35 +266,15 @@ sub method {
     }
 }
 
-=head2 post URL, ARGS
-
-This will post C<ARGS> to C<URL>. See the documentation for C<method> about
-the format of C<URL>.
-
-=cut
-
 sub post {
     my $self = shift;
     $self->method('post', @_);
 }
 
-=head2 get URL, ARGS
-
-This will get the specified C<URL> with C<ARGS> as query parameters. See the
-documentation for C<method> about the format of C<URL>.
-
-=cut
-
 sub get {
     my $self = shift;
     $self->method('get', @_);
 }
-
-=head2 act ACTION, ARGS
-
-Perform C<ACTION>, using C<ARGS>. This does use the REST interface.
-
-=cut
 
 sub act {
     my $self   = shift;
@@ -406,12 +286,6 @@ sub act {
     return $self->post(["action", $action], @_);
 }
 
-=head2 create MODEL, FIELDS
-
-Create a new object of type C<MODEL> with the C<FIELDS> set.
-
-=cut
-
 sub create {
     my $self  = shift;
     my $model = shift;
@@ -421,12 +295,6 @@ sub create {
 
     return $self->post(["model", $model], @_);
 }
-
-=head2 delete MODEL, KEY => VALUE
-
-Find some C<MODEL> where C<KEY> is C<VALUE> and delete it.
-
-=cut
 
 sub delete {
     my $self   = shift;
@@ -440,12 +308,6 @@ sub delete {
     return $self->method(delete => ["model", $model, $key, $value]);
 }
 
-=head2 update MODEL, KEY => VALUE, FIELDS
-
-Find some C<MODEL> where C<KEY> is C<VALUE> and set C<FIELDS> on it.
-
-=cut
-
 sub update {
     my $self   = shift;
     my $model  = shift;
@@ -458,12 +320,6 @@ sub update {
     return $self->method(put => ["model", $model, $key, $value], @_);
 }
 
-=head2 read MODEL, KEY => VALUE
-
-Find some C<MODEL> where C<KEY> is C<VALUE> and return it.
-
-=cut
-
 sub read {
     my $self   = shift;
     my $model  = shift;
@@ -472,14 +328,6 @@ sub read {
 
     return $self->get(["model", $model, $key, $value]);
 }
-
-=head2 search MODEL, FIELDS[, OUTCOLUMN]
-
-Searches for all objects of type C<MODEL> that satisfy C<FIELDS>. The optional
-C<OUTCOLUMN> defines the output column, in case you don't want the entire
-records.
-
-=cut
 
 sub search {
     my $self  = shift;
@@ -505,19 +353,6 @@ sub search {
     return $self->get(["search", $model, @args]);
 }
 
-=head2 validate_action_args action => args
-
-Validates the given action, to check to make sure that all mandatory arguments
-are given and that no unknown arguments are given.
-
-You may give action as a string, which will be interpreted as the action name;
-or as an array reference for CRUD - the first element will be the action
-(create, update, or delete) and the second element will be the model name.
-
-This will throw an error or if validation succeeds, will return 1.
-
-=cut
-
 sub validate_action_args {
     my $self   = shift;
     my $action = shift;
@@ -538,11 +373,11 @@ sub validate_action_args {
         $name = $action;
     }
 
-    my $action_args = $self->get("action/$name");
+    my $action_spec = $self->get_action_spec($name);
 
-    for my $arg (keys %$action_args) {
+    for my $arg (keys %$action_spec) {
         confess "Mandatory argument '$arg' not given for action $name."
-            if $action_args->{$arg}{mandatory} && !defined($args{$arg});
+            if $action_spec->{$arg}{mandatory} && !defined($args{$arg});
         delete $args{$arg};
     }
 
@@ -554,11 +389,27 @@ sub validate_action_args {
     return 1;
 }
 
-=head2 get_sid
+sub get_action_spec {
+    my $self = shift;
+    my $name = shift;
 
-Retrieves the sid from the L<LWP::UserAgent> object.
+    unless ($self->action_specs->{$name}) {
+        $self->action_specs->{$name} = $self->get("action/$name");
+    }
 
-=cut
+    return $self->action_specs->{$name};
+}
+
+sub get_model_spec {
+    my $self = shift;
+    my $name = shift;
+
+    unless ($self->model_specs->{$name}) {
+        $self->model_specs->{$name} = $self->get("model/$name");
+    }
+
+    return $self->model_specs->{$name};
+}
 
 sub get_sid {
     my $self = shift;
@@ -571,23 +422,11 @@ sub get_sid {
     $self->sid($sid);
 }
 
-=head2 join_url FRAGMENTS
-
-Encodes C<FRAGMENTS> and joins them with C</>.
-
-=cut
-
 sub join_url {
     my $self = shift;
 
     return join '/', map { $self->escape($_) } grep { defined } @_
 }
-
-=head2 escape STRINGS
-
-Returns C<STRINGS>, properly URI-escaped.
-
-=cut
 
 sub escape {
     my $self = shift;
@@ -597,13 +436,6 @@ sub escape {
            @_
 }
 
-=head2 load_date DATE
-
-Loads C<DATE> (which must be of the form C<YYYY-MM-DD>) into a L<DateTime>
-object.
-
-=cut
-
 sub load_date {
     my $self = shift;
     my $ymd  = shift;
@@ -611,6 +443,7 @@ sub load_date {
     my ($y, $m, $d) = $ymd =~ /^(\d\d\d\d)-(\d\d)-(\d\d)(?: 00:00:00)?$/
         or confess "Invalid date passed to load_date: $ymd. Expected yyyy-mm-dd.";
 
+    require DateTime;
     return DateTime->new(
         time_zone => 'floating',
         year      => $y,
@@ -618,13 +451,6 @@ sub load_date {
         day       => $d,
     );
 }
-
-=head2 email_eq EMAIL, EMAIL
-
-Compares the two email addresses. Returns true if they're equal, false if
-they're not.
-
-=cut
 
 sub email_eq {
     my $self = shift;
@@ -648,12 +474,6 @@ sub email_eq {
     return $a eq $b;
 }
 
-=head2 is_me EMAIL
-
-Returns true if C<EMAIL> looks like it is the same as the current user's.
-
-=cut
-
 sub is_me {
     my $self = shift;
     my $email = shift;
@@ -662,34 +482,6 @@ sub is_me {
 
     return $self->email_eq($self->email, $email);
 }
-
-=head2 load_config
-
-This will return a hash reference of the user's preferences. Because this
-method is designed for use in small standalone scripts, it has a few
-peculiarities.
-
-=over 4
-
-=item
-
-It will C<warn> if the permissions are too liberal on the config file, and fix
-them.
-
-=item
-
-It will prompt the user for an email and password if necessary. Given
-the email and password, it will attempt to log in using them. If that fails,
-then it will try again.
-
-=item
-
-Upon successful login, it will write a new config consisting of the options
-already in the config plus session ID, email, and password.
-
-=back
-
-=cut
 
 sub load_config {
     my $self = shift;
@@ -723,12 +515,6 @@ sub load_config {
     return $self->config;
 }
 
-=head2 config_permissions
-
-This will warn about (and fix) config files being readable by group or others.
-
-=cut
-
 sub config_permissions {
     my $self = shift;
     my $file = $self->config_file;
@@ -742,14 +528,6 @@ sub config_permissions {
         chmod 0600, $file;
     }
 }
-
-=head2 read_config_file
-
-This transforms the config file into a hashref. It also does any postprocessing
-needed, such as transforming localhost to 127.0.0.1 (due to an obscure bug,
-probably in HTTP::Cookies).
-
-=cut
 
 sub read_config_file {
     my $self = shift;
@@ -768,13 +546,6 @@ sub read_config_file {
     }
 }
 
-=head2 write_config_file
-
-This will write the config to disk. This is usually only done when a sid is
-discovered, but may happen any time.
-
-=cut
-
 sub write_config_file {
     my $self = shift;
     my $file = $self->config_file;
@@ -782,13 +553,6 @@ sub write_config_file {
     YAML::DumpFile($file, $self->config);
     chmod 0600, $file;
 }
-
-=head2 prompt_login_info
-
-This will ask the user for her email and password. It may do so repeatedly
-until login is successful.
-
-=cut
 
 sub prompt_login_info {
     my $self = shift;
@@ -830,19 +594,6 @@ END_WELCOME
     }
 }
 
-=head2 filter_config [DIRECTORY] -> HASH
-
-Looks at the (given or) current directory, and all parent directories, for
-files named C<< $self->filter_file >>. Each file is YAML. The contents of the
-files will be merged (such that child settings override parent settings), and
-the merged hash will be returned.
-
-What this is used for is up to the application or subclasses. L<Net::Jifty>
-doesn't look at this at all, but it may in the future (such as for email and
-password).
-
-=cut
-
 sub filter_config {
     my $self = shift;
 
@@ -873,12 +624,6 @@ sub filter_config {
     return $all_config;
 }
 
-=head2 email_of ID
-
-Retrieve user C<ID>'s email address.
-
-=cut
-
 sub email_of {
     my $self = shift;
     my $id = shift;
@@ -886,6 +631,253 @@ sub email_of {
     my $user = $self->read(User => id => $id);
     return $user->{email};
 }
+
+__PACKAGE__->meta->make_immutable;
+no Moose;
+
+1;
+
+__END__
+
+=head1 NAME
+
+Net::Jifty - interface to online Jifty applications
+
+=head1 SYNOPSIS
+
+    use Net::Jifty;
+    my $j = Net::Jifty->new(
+        site        => 'http://mushroom.mu/',
+        cookie_name => 'MUSHROOM_KINGDOM_SID',
+        email       => 'god@mushroom.mu',
+        password    => 'melange',
+    );
+
+    # the story begins
+    $j->create(Hero => name => 'Mario', job => 'Plumber');
+
+    # find the hero whose job is Plumber and change his name to Luigi
+    # and color to green
+    $j->update(Hero => job => 'Plumber',
+        name  => 'Luigi',
+        color => 'Green',
+    );
+
+    # win!
+    $j->delete(Enemy => name => 'Bowser');
+
+=head1 DESCRIPTION
+
+L<Jifty> is a full-stack web framework. It provides an optional REST interface
+for applications. Using this module, you can interact with that REST
+interface to write client-side utilities.
+
+You can use this module directly, but you'll be better off subclassing it, such
+as what we've done for L<Net::Hiveminder>.
+
+This module also provides a number of convenient methods for writing short
+scripts. For example, passing C<< use_config => 1 >> to C<new> will look at
+the config file for the username and password (or SID) of the user. If neither
+is available, it will prompt the user for them.
+
+=head2 BUILD
+
+Each L<Net::Jifty> object will do the following upon creation:
+
+=over 4
+
+=item Read config
+
+..but only if you C<use_config> is set to true.
+
+=item Log in
+
+..unless a sid is available, in which case we're already logged in.
+
+=back
+
+=head2 login
+
+This assumes your site is using L<Jifty::Plugin::Authentication::Password>.
+If that's not the case, override this in your subclass.
+
+This is called automatically when each L<Net::Jifty> object is constructed
+(unless a session ID is passed in).
+
+=head2 call ACTION, ARGS
+
+This uses the Jifty "web services" API to perform C<ACTION>. This is I<not> the
+REST interface, though it resembles it to some degree.
+
+This module currently only uses this to log in.
+
+=head2 form_url_encoded_args ARGS
+
+This will take a hash containing arguments and convert those arguments into URL encoded form. I.e., (x => 1, y => 2, z => 3) becomes:
+
+  x=1&y=2&z=3
+
+These are then ready to be appened to the URL on a GET or placed into the content of a PUT.
+
+=head2 method METHOD, URL[, ARGS]
+
+This will perform a GET, POST, PUT, DELETE, etc using the internal
+L<LWP::UserAgent> object.
+
+C<URL> may be a string or an array reference (which will have its parts
+properly escaped and joined with C</>). C<URL> already has
+C<http://your.site/=/> prepended to it, and C<.yml> appended to it, so you only
+need to pass something like C<model/YourApp.Model.Foo/name>, or
+C<[qw/model YourApp.Model.Foo name]>.
+
+This will return the data structure returned by the Jifty application, or throw
+an error.
+
+=head2 post URL, ARGS
+
+This will post C<ARGS> to C<URL>. See the documentation for C<method> about
+the format of C<URL>.
+
+=head2 get URL, ARGS
+
+This will get the specified C<URL> with C<ARGS> as query parameters. See the
+documentation for C<method> about the format of C<URL>.
+
+=head2 act ACTION, ARGS
+
+Perform C<ACTION>, using C<ARGS>. This does use the REST interface.
+
+=head2 create MODEL, FIELDS
+
+Create a new object of type C<MODEL> with the C<FIELDS> set.
+
+=head2 delete MODEL, KEY => VALUE
+
+Find some C<MODEL> where C<KEY> is C<VALUE> and delete it.
+
+=head2 update MODEL, KEY => VALUE, FIELDS
+
+Find some C<MODEL> where C<KEY> is C<VALUE> and set C<FIELDS> on it.
+
+=head2 read MODEL, KEY => VALUE
+
+Find some C<MODEL> where C<KEY> is C<VALUE> and return it.
+
+=head2 search MODEL, FIELDS[, OUTCOLUMN]
+
+Searches for all objects of type C<MODEL> that satisfy C<FIELDS>. The optional
+C<OUTCOLUMN> defines the output column, in case you don't want the entire
+records.
+
+=head2 validate_action_args action => args
+
+Validates the given action, to check to make sure that all mandatory arguments
+are given and that no unknown arguments are given.
+
+You may give action as a string, which will be interpreted as the action name;
+or as an array reference for CRUD - the first element will be the action
+(create, update, or delete) and the second element will be the model name.
+
+This will throw an error or if validation succeeds, will return 1.
+
+=head2 get_action_spec action_name
+
+Returns the action spec (which arguments it takes, and metadata about them).
+The first request for a particular action will ask the server for the spec.
+Subsequent requests will return it from the cache.
+
+=head2 get_model_spec model_name
+
+Returns the model spec (which columns it has).  The first request for a
+particular model will ask the server for the spec.  Subsequent requests will
+return it from the cache.
+
+=head2 get_sid
+
+Retrieves the sid from the L<LWP::UserAgent> object.
+
+=head2 join_url FRAGMENTS
+
+Encodes C<FRAGMENTS> and joins them with C</>.
+
+=head2 escape STRINGS
+
+Returns C<STRINGS>, properly URI-escaped.
+
+=head2 load_date DATE
+
+Loads C<DATE> (which must be of the form C<YYYY-MM-DD>) into a L<DateTime>
+object.
+
+=head2 email_eq EMAIL, EMAIL
+
+Compares the two email addresses. Returns true if they're equal, false if
+they're not.
+
+=head2 is_me EMAIL
+
+Returns true if C<EMAIL> looks like it is the same as the current user's.
+
+=head2 load_config
+
+This will return a hash reference of the user's preferences. Because this
+method is designed for use in small standalone scripts, it has a few
+peculiarities.
+
+=over 4
+
+=item
+
+It will C<warn> if the permissions are too liberal on the config file, and fix
+them.
+
+=item
+
+It will prompt the user for an email and password if necessary. Given
+the email and password, it will attempt to log in using them. If that fails,
+then it will try again.
+
+=item
+
+Upon successful login, it will write a new config consisting of the options
+already in the config plus session ID, email, and password.
+
+=back
+
+=head2 config_permissions
+
+This will warn about (and fix) config files being readable by group or others.
+
+=head2 read_config_file
+
+This transforms the config file into a hashref. It also does any postprocessing
+needed, such as transforming localhost to 127.0.0.1 (due to an obscure bug,
+probably in HTTP::Cookies).
+
+=head2 write_config_file
+
+This will write the config to disk. This is usually only done when a sid is
+discovered, but may happen any time.
+
+=head2 prompt_login_info
+
+This will ask the user for her email and password. It may do so repeatedly
+until login is successful.
+
+=head2 filter_config [DIRECTORY] -> HASH
+
+Looks at the (given or) current directory, and all parent directories, for
+files named C<< $self->filter_file >>. Each file is YAML. The contents of the
+files will be merged (such that child settings override parent settings), and
+the merged hash will be returned.
+
+What this is used for is up to the application or subclasses. L<Net::Jifty>
+doesn't look at this at all, but it may in the future (such as for email and
+password).
+
+=head2 email_of ID
+
+Retrieve user C<ID>'s email address.
 
 =head1 SEE ALSO
 
@@ -907,12 +899,10 @@ L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Net-Jifty>.
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2007 Best Practical Solutions.
+Copyright 2007-2008 Best Practical Solutions.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
 =cut
-
-1;
 
