@@ -18,4 +18,5 @@ t/002-method.t
 t/003-crud.t
 t/004-search.t
 t/005-validate.t
+t/006-uploads.t
 t/lib/Net/Jifty/Test.pm
