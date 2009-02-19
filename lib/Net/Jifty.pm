@@ -2,22 +2,15 @@
 package Net::Jifty;
 use Moose;
 
-our $VERSION = '0.08';
+our $VERSION = '0.10';
 
 use LWP::UserAgent;
-use HTTP::Request;
 use URI;
 
 use YAML;
-use Hash::Merge;
 
 use Encode;
 use Fcntl qw(:mode);
-
-use Cwd;
-use Path::Class;
-
-use Email::Address;
 
 has site => (
     is            => 'rw',
@@ -97,6 +90,7 @@ has config_file => (
     is            => 'rw',
     isa           => 'Str',
     default       => "$ENV{HOME}/.jifty",
+    predicate     => 'has_config_file',
     documentation => "The place to look for the user's config file",
 );
 
@@ -153,7 +147,7 @@ sub BUILD {
     my $self = shift;
 
     $self->load_config
-        if $self->use_config && $self->config_file;
+        if $self->use_config && $self->has_config_file;
 
     $self->login
         unless $self->sid;
@@ -498,6 +492,8 @@ sub email_eq {
 
     # so, both are defined
 
+    require Email::Address;
+
     for ($a, $b) {
         $_ = 'nobody@localhost' if $_ eq 'nobody' || /<nobody>/;
         my ($email) = Email::Address->parse($_);
@@ -606,12 +602,16 @@ END_WELCOME
         $self->config->{email} = <STDIN>;
         chomp($self->config->{email});
 
-        require Term::ReadKey;
+        my $read_mode = eval {
+            require Term::ReadKey;
+            \&Term::ReadKey::ReadMode;
+        } || sub {};
+
         print "And your password? ";
-        Term::ReadKey::ReadMode('noecho');
+        $read_mode->('noecho');
         $self->config->{password} = <STDIN>;
         chomp($self->config->{password});
-        Term::ReadKey::ReadMode('restore');
+        $read_mode->('restore');
 
         print "\n";
 
@@ -634,9 +634,12 @@ sub filter_config {
 
     my $all_config = {};
 
-    my $dir = dir(shift || getcwd);
+    require Path::Class;
+    require Cwd;
+    my $dir = Path::Class::dir(shift || Cwd::getcwd());
 
-    my $old_behavior = Hash::Merge::get_behavior;
+    require Hash::Merge;
+    my $old_behavior = Hash::Merge::get_behavior();
     Hash::Merge::set_behavior('RIGHT_PRECEDENT');
 
     while (1) {
