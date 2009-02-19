@@ -17,10 +17,10 @@ no_index:
     - inc
     - t
 requires:
+  Any::Moose: 0.04
   LWP::UserAgent: 0
-  Moose: 0.50
   URI: 0
   YAML: 0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.10
+version: 0.11
